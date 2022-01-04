@@ -1,0 +1,72 @@
+esphome:
+  name: power-meter
+  on_boot:
+    priority: 600
+    then:
+      - pulse_meter.set_total_pulses:
+          id: pulse_meter_sensor
+          value: !lambda |-
+            return id(energy_total_) * 10000;
+
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
+
+preferences:
+  flash_write_interval: 60min
+
+# Enable logging
+logger:
+  level: DEBUG
+
+wifi:
+  ssid: !secret ssid
+  password: !secret wifi_pass
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Info-Display Fallback Hotspot"
+    password: !secret ap_pass
+
+captive_portal:
+
+web_server:
+  port: 80
+
+# Enable Home Assistant API
+api:
+  password: !secret api_pass
+
+ota:
+  password: !secret ota_pass
+
+globals:
+  - id: energy_total_
+    type: float
+    restore_value: yes
+    initial_value: '19755.1'
+
+sensor:
+  - platform: pulse_meter
+    pin: D1
+    id: pulse_meter_sensor
+    # update_interval: 10s
+    internal_filter: 50ms
+    accuracy_decimals: 0
+    unit_of_measurement: 'W'
+    name: 'Electricity Power'
+    filters:
+      - multiply: 6  # 1 pulses per min / 10 000 pulses per kWh * 60 min per h * 1000 W per kW
+
+    total:
+      id: pulse_meter_total
+      unit_of_measurement: 'kWh'
+      name: 'Electricity Energy Total'
+      accuracy_decimals: 3
+      filters:
+        - multiply: 0.0001  # (1 / 10 000 pulses per kWh)
+      on_value:
+        then:
+          - globals.set:
+              id: energy_total_
+              value: !lambda |-
+                return id(pulse_meter_total).state;
